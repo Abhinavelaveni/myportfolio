@@ -1,0 +1,386 @@
+<div id="qr-code-container">
+                      <p>Scan QR</p>
+                      <img id="qr-code-image" src="/whatsapp/qr/image" alt="WhatsApp QR Code" onerror="handleQRError()" />
+                  </div>
+
+
+
+
+
+
+
+// Global constants
+const BASE_URL = 'http://localhost:3000';
+const REFRESH_INTERVAL = 5000;
+const STATUS_UPDATE_INTERVAL = 20000;
+
+// DOM element selectors
+const DOM = {
+    qrImage: () => document.getElementById('qr-code-image'),
+    qrContainer: () => document.getElementById('qr-code-container'),
+    status: () => document.getElementById('status') || document.querySelector('#qr-code-container > p'),
+    deviceTable: () => document.getElementById('device-table')
+};
+
+/**
+ * QR Code Management Functions
+ */
+function refreshQRCode() {
+    const qrImage = DOM.qrImage();
+    const timestamp = new Date().getTime();
+    qrImage.src = `${BASE_URL}/qr/image?t=${timestamp}`; // Updated URL path to match HTML
+    
+    qrImage.onload = function() {
+        DOM.qrContainer().style.display = 'block';
+        qrImage.style.display = 'block';
+        const statusEl = DOM.status();
+        if (statusEl) statusEl.textContent = 'Scan QR Code with WhatsApp';
+    };
+    
+    qrImage.onerror = function() {
+        handleQRError();
+    };
+}
+
+function handleQRError() {
+    DOM.qrImage().style.display = 'none';
+    const statusEl = DOM.status();
+    if (statusEl) statusEl.textContent = 'QR Code not available. Please try again.';
+    // Use SweetAlert for better error presentation, if available
+    if (typeof Swal !== 'undefined') {
+        Swal.fire('Error', 'QR Code not available. Please try again.', 'error');
+    } else {
+        alert("QR Code not available. Please try again.");
+    }
+}
+
+/**
+ * Device Management Functions
+ */
+function loadDevices() {
+    $.get(`${BASE_URL}/clients`)
+        .done(function(data) {
+            const tbody = DOM.deviceTable();
+            if (!tbody) return;
+            
+            // Clear existing example rows
+            tbody.innerHTML = '';
+            
+            if (data.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-center">No devices found.</td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            data.forEach(client => {
+                const statusClass = client.status === 'ready' ? 'bg-success' : 'bg-danger';
+                const statusText = client.status === 'ready' ? 'Connected' : 'Disconnected';
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${escapeHtml(client.name || 'Device')}</td>
+                    <td>${escapeHtml(client.number || 'N/A')}</td>
+                    <td><span class="badge ${statusClass}">${statusText}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-danger" 
+                                data-device-id="${client.id}">
+                            Remove
+                        </button>
+                    </td>
+                `;
+                
+                // Add event listener to the remove button
+                const removeBtn = row.querySelector('button');
+                removeBtn.addEventListener('click', function() {
+                    removeDevice(client.id);
+                });
+                
+                tbody.appendChild(row);
+            });
+        })
+        .fail(function() {
+            const tbody = DOM.deviceTable();
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-center text-danger">Failed to load devices.</td>
+                    </tr>
+                `;
+            }
+        });
+}
+
+function removeDevice(deviceId) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Are you sure?',
+            text: 'You won\'t be able to revert this!',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, delete it!',
+            cancelButtonText: 'Cancel',
+        }).then((result) => {
+            if (result.isConfirmed) {
+                performDeviceRemoval(deviceId);
+            }
+        });
+    } else {
+        if (confirm('Are you sure you want to remove this device?')) {
+            performDeviceRemoval(deviceId);
+        }
+    }
+}
+
+function performDeviceRemoval(deviceId) {
+    $.ajax({
+        url: `${BASE_URL}/client/${deviceId}`,
+        type: 'DELETE',
+        success: function() {
+            loadDevices(); // Reload devices after deletion
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Deleted!', 'Device has been deleted.', 'success');
+            } else {
+                alert('Device has been deleted.');
+            }
+        },
+        error: function(xhr) {
+            const errorMsg = xhr.responseJSON?.message || 'Failed to delete device.';
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error!', errorMsg, 'error');
+            } else {
+                alert('Error: ' + errorMsg);
+            }
+        },
+    });
+}
+
+/**
+ * Status Check Function
+ */
+function checkClientStatus() {
+    $.get(`${BASE_URL}/status`)
+        .done(function(data) {
+            const qrImage = DOM.qrImage();
+            
+            if (data.status === 'ready') {
+                qrImage.style.display = 'none';
+                DOM.qrContainer().style.display = 'none';
+            } else if (data.status === 'qr_received') {
+                qrImage.style.display = 'block';
+                DOM.qrContainer().style.display = 'block';
+                if (DOM.status()) DOM.status().textContent = 'Scan QR Code with WhatsApp';
+            } else if (data.status === 'disconnected') {
+                qrImage.style.display = 'none';
+                DOM.qrContainer().style.display = 'none';
+            }
+            
+            // Update device table to reflect current status
+            loadDevices();
+        })
+        .fail(function() {
+            console.error('Failed to fetch client status');
+        });
+}
+
+/**
+ * Utility Functions
+ */
+function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return String(unsafe)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+/**
+ * Initialization and Event Listeners
+ */
+$(document).ready(function() {
+    // Initialize components
+    checkClientStatus();
+    loadDevices();
+    
+    // Set up polling interval
+    setInterval(checkClientStatus, REFRESH_INTERVAL);
+    
+    // Expose necessary functions to window object for HTML onclick handlers
+    window.refreshQRCode = refreshQRCode;
+    window.handleQRError = handleQRError;
+    window.removeDevice = removeDevice;
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+serfver
+
+const express = require('express');
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const QRCode = require('qrcode');
+const sqlite3 = require('sqlite3').verbose();
+const cors = require('cors');
+const puppeteer = require('puppeteer'); // Import puppeteer explicitly
+
+const app = express();
+const port = 3000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Database setup
+const db = new sqlite3.Database('./clients.db');
+
+// Create clients table if it doesn't exist
+db.serialize(() => {
+    db.run(`
+        CREATE TABLE IF NOT EXISTS clients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            number TEXT,
+            status TEXT
+        )
+    `);
+});
+
+// WhatsApp client setup
+const client = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-gpu', // Disable GPU acceleration
+            '--disable-dev-shm-usage', // Avoid /dev/shm issues
+            '--remote-debugging-port=9222', // Enable remote debugging
+        ],
+        executablePath: process.env.CHROMIUM_PATH || puppeteer.executablePath(), // Use system Chromium or Puppeteer's bundled version
+    },
+});
+
+let currentQR = null;
+let clientStatus = 'disconnected';
+
+// Event: QR Code generated
+client.on('qr', (qr) => {
+    console.log('QR Code received, generating...');
+    currentQR = qr;
+    clientStatus = 'qr_received';
+});
+
+// Event: Client is ready
+client.on('ready', () => {
+    console.log('WhatsApp client is ready!');
+    clientStatus = 'ready';
+    currentQR = null;
+
+    // Store client details in the database
+    const clientInfo = {
+        name: 'Device 1',
+        number: '+1234567890', // Replace with actual number if available
+        status: 'ready',
+    };
+
+    db.run(
+        'INSERT INTO clients (name, number, status) VALUES (?, ?, ?)',
+        [clientInfo.name, clientInfo.number, clientInfo.status],
+        (err) => {
+            if (err) console.error('Error storing client details:', err);
+        }
+    );
+});
+
+// Event: Client authenticated
+client.on('authenticated', () => {
+    console.log('Client authenticated successfully!');
+    clientStatus = 'authenticated';
+});
+
+// Event: Client disconnected
+client.on('disconnected', (reason) => {
+    console.log('Client disconnected. Reason:', reason);
+    clientStatus = 'disconnected';
+    currentQR = null;
+
+    // Update client status in the database
+    db.run(
+        'UPDATE clients SET status = ? WHERE id = ?',
+        ['disconnected', 1], // Assuming only one client for simplicity
+        (err) => {
+            if (err) console.error('Error updating client status:', err);
+        }
+    );
+});
+
+// Initialize the WhatsApp client
+client.initialize().catch((error) => {
+    console.error('Error initializing WhatsApp client:', error);
+    clientStatus = 'disconnected';
+});
+
+// Endpoint: Serve QR code as an image
+app.get('/qr/image', async (req, res) => {
+    if (!currentQR) {
+        return res.status(404).json({ error: 'QR Code not available. Please try again.' });
+    }
+
+    try {
+        const qrImage = await QRCode.toDataURL(currentQR);
+        const imgBuffer = Buffer.from(qrImage.split(',')[1], 'base64');
+        res.writeHead(200, {
+            'Content-Type': 'image/png',
+            'Content-Length': imgBuffer.length,
+        });
+        res.end(imgBuffer);
+    } catch (error) {
+        console.error('Error generating QR code image:', error);
+        res.status(500).json({ error: 'Error generating QR Code. Please try again later.' });
+    }
+});
+
+// Endpoint: Check the client status
+app.get('/status', (req, res) => {
+    res.json({ status: clientStatus });
+});
+
+// Endpoint: Get all client details
+app.get('/clients', (req, res) => {
+    db.all('SELECT * FROM clients', [], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: 'Error fetching clients' });
+        }
+        res.json(rows);
+    });
+});
+
+// Endpoint: Remove a client by ID
+app.delete('/client/:id', (req, res) => {
+    const clientId = parseInt(req.params.id);
+    db.run('DELETE FROM clients WHERE id = ?', [clientId], function (err) {
+        if (err) {
+            return res.status(500).json({ error: 'Error deleting client' });
+        }
+        res.json({ message: 'Client removed successfully!' });
+    });
+});
+
+// Start the server
+app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+});
