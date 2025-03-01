@@ -1217,12 +1217,12 @@ textarea.input-field {
   }
 
 }
-
 .resumebutton {
   padding: 10px 20px;
   background-color: var(--theme-color);
   color: white;
   border: none;
+  border-radius: var(--radius-8);
   cursor: pointer;
   transition: background-color 0.3s ease, transform 0.3s ease;
 }
