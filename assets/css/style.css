@@ -1,24 +1,5 @@
-/*-----------------------------------*\
-  #style.css
-\*-----------------------------------*/
-
-/**
- * copyright 2022 codewithsadee
- */
-
-
-
-
-
-/*-----------------------------------*\
-  #CUSTOM PROPERTY
-\*-----------------------------------*/
-
 :root {
 
-  /** 
-   * colors
-   */
 
   --sonic-silver: hsl(0, 0%, 46%);
   --spanish-gray: hsl(0, 0%, 60%);
@@ -1165,7 +1146,25 @@ textarea.input-field {
 }
 
 
+/* resume section*/
+.resumebutton {
+  padding: 10px 20px;
+  background-color: var(--theme-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius-8);
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.3s ease;
+}
 
+.resumebutton:hover {
+  background-color: var(--black);
+  transform: scale(1.05);
+}
+
+.resumebutton:active {
+  transform: scale(0.95);
+}
 
 
 /**
@@ -1216,22 +1215,4 @@ textarea.input-field {
     width: 275px;
   }
 
-}
-.resumebutton {
-  padding: 10px 20px;
-  background-color: var(--theme-color);
-  color: white;
-  border: none;
-  border-radius: var(--radius-8);
-  cursor: pointer;
-  transition: background-color 0.3s ease, transform 0.3s ease;
-}
-
-.resumebutton:hover {
-  background-color: var(--black);
-  transform: scale(1.05);
-}
-
-.resumebutton:active {
-  transform: scale(0.95);
 }
